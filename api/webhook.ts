@@ -28,11 +28,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userText = message.text;
   const allowedId = parseInt(process.env.ALLOWED_CHAT_ID as string);
 
-  if (chatId !== allowedId) return res.status(200).send("OK");
+  console.log(
+    "[webhook] masuk. env:",
+    JSON.stringify({
+      allowedSet: Boolean(process.env.ALLOWED_CHAT_ID),
+      geminiKeySet: Boolean(process.env.GEMINI_API_KEY),
+      telegramTokenSet: Boolean(process.env.TELEGRAM_TOKEN),
+      googleCredsSet: Boolean(
+        process.env.GOOGLE_CLIENT_ID &&
+          process.env.GOOGLE_CLIENT_SECRET &&
+          process.env.GOOGLE_REFRESH_TOKEN,
+      ),
+      allowedId,
+      chatId,
+      text: String(userText).slice(0, 80),
+    }),
+  );
+
+  if (chatId !== allowedId) {
+    console.warn(
+      `[webhook] chatId TIDAK cocok. chatId=${chatId} allowedId=${allowedId} -> diabaikan`,
+    );
+    return res.status(200).send("OK");
+  }
 
   try {
     const nowIso = new Date().toISOString();
 
+    console.log("[webhook] memanggil Gemini dengan model gemini-3.5-flash-lite...");
+    const t0 = Date.now();
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
       contents: userText,
@@ -63,6 +87,14 @@ Jika pengguna meminta pendapat atau mengeluh, jadilah cermin yang brutal, bongka
         ],
       },
     });
+
+    console.log(
+      `[webhook] Gemini selesai dalam ${
+        Date.now() - t0
+      }ms. functionCalls=${response.functionCalls?.length ?? 0} text="${String(
+        response.text ?? "",
+      ).slice(0, 100)}"`,
+    );
 
     let finalReply = "";
     const functionCalls = response.functionCalls;
@@ -176,7 +208,8 @@ Jika pengguna meminta pendapat atau mengeluh, jadilah cermin yang brutal, bongka
       finalReply = response.text || "Tidak ada balasan.";
     }
 
-    await fetch(
+    console.log(`[webhook] finalReply="${String(finalReply).slice(0, 100)}"`);
+    const sendRes = await fetch(
       `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
       {
         method: "POST",
@@ -184,8 +217,36 @@ Jika pengguna meminta pendapat atau mengeluh, jadilah cermin yang brutal, bongka
         body: JSON.stringify({ chat_id: chatId, text: finalReply }),
       },
     );
+    console.log(
+      `[webhook] kirim ke Telegram -> status=${sendRes.status} ok=${sendRes.ok} body=${(
+        await sendRes.text()
+      ).slice(0, 200)}`,
+    );
   } catch (error) {
-    console.error("Error processing request:", error);
+    const err =
+      error instanceof Error ? error : new Error(String(error));
+    const errStatus =
+      (error as any)?.status ?? (error as any)?.statusCode ?? "?";
+    console.error(
+      `[webhook] ERROR saat proses: status=${errStatus} message=${err.message}`,
+      error,
+    );
+
+    try {
+      await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `[ERROR] ${errStatus}: ${err.message}`.slice(0, 4000),
+          }),
+        },
+      );
+    } catch (sendErr) {
+      console.error("[webhook] Gagal mengirim report error ke Telegram:", sendErr);
+    }
   }
 
   res.status(200).send("OK");
