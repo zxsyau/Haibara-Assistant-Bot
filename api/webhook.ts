@@ -61,9 +61,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model: "gemini-3.5-flash-lite",
       contents: userText,
       config: {
-        systemInstruction: `Kamu adalah Lucius, asisten eksekutif tingkat tinggi. Waktu saat ini (WIB / Asia/Jakarta): ${nowIso}.
+        systemInstruction: `Kamu adalah Haibara, asisten eksekutif tingkat tinggi. Waktu saat ini (WIB / Asia/Jakarta): ${nowIso}.
 
-ATURAN 1: MODE EKSEKUTOR
+1: MODE EKSEKUTOR
 - Kalender: Gunakan 'createCalendarEvent', 'getCalendarEvents', 'updateCalendarEvent', 'deleteCalendarEvent'.
 *PENTING*: Jika pengguna minta mengubah atau menghapus jadwal/task tapi kamu BELUM tahu ID-nya, panggil 'getCalendarEvents' atau 'getNoteTasks' terlebih dahulu.
 - Task / Notes / Reminder: Gunakan 'createNoteTask' (untuk membuat), 'getNoteTasks' (untuk membaca), 'completeNoteTask' (untuk menandai selesai), 'deleteNoteTask' (untuk menghapus).
